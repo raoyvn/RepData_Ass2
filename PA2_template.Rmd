@@ -1,0 +1,223 @@
+---
+title: "Study of Severe Weather Events and their impact on population health and economic consequences"
+author: "Venkata Yerubandi"
+date: "January 23, 2015"
+output: html_document
+---
+#### Synopsis
+All weather events have health(injuries/fatalities) and economic consequences(property/crop damages) for counties. 
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database
+
+[National Weather Service Storm Data Documentation ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+
+[National Climatic Data Center Storm Events FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+to address the following questions:
+
+1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+####  Data Processing 
+```{r, echo=FALSE, cache=TRUE}
+setwd("/Users/venkata/Downloads/coursera/Reproducible Research/Week 3/Assignment")
+require("R.utils")
+library(car)
+
+library(ggplot2)
+```
+
+```{r, echo=TRUE, cache=TRUE}
+# unzip the data file 
+bunzip2("repdata-data-StormData.csv.bz2","repdata-data-StormData.csv",remove=FALSE,overwrite=TRUE)
+stormdata<-read.csv("repdata-data-StormData.csv")
+
+# look at the storm data topology
+str(stormdata)
+
+# look at stormdata$PROPDMGEXP and stormdata$CROPDMGEXP
+# expenditure is encoded as B for Billion etc
+unique(stormdata$PROPDMGEXP)
+unique(stormdata$CROPDMGEXP)
+
+# normalize expenditure indicators
+# B is encoded as numeric billion etc
+# assumption - a expenditore of a numeric 2 is encoded as 10^2 
+# +/- are assigned a 0
+stormdata$PROPDMGEXP <- factor(tolower(stormdata$PROPDMGEXP))
+stormdata$CROPDMGEXP <- factor(tolower(stormdata$CROPDMGEXP))
+stormdata$PROPDMGEXP <- as.numeric(recode(as.character(stormdata$PROPDMGEXP), 
+                                          "'0'=1;'1'=10;'2'=10^2;'3'=10^3;'4'=10^4;'5'=10^5;'6'=10^6;'7'=10^7;'8'=10^8;'b'=10^9;'h'=10^2;'k'=10^3;'m'=10^6;'-'=0;'?'=0;'+'=0"))
+stormdata$CROPDMGEXP <- as.numeric(recode(as.character(stormdata$CROPDMGEXP), 
+                                          "'0'=1;'1'=10;'2'=10^2;'3'=10^3;'4'=10^4;'5'=10^5;'6'=10^6;'7'=10^7;'8'=10^8;'b'=10^9;'h'=10^2;'k'=10^3;'m'=10^6;'-'=0;'?'=0;'+'=0"))
+# calculate property and crop damage values in dollars
+stormdata$PROPDMGDOLLAR <- stormdata$PROPDMG * stormdata$PROPDMGEXP
+stormdata$CROPDMGDOLLAR <- stormdata$CROPDMG * stormdata$CROPDMGEXP
+```
+
+```{r, echo=FALSE, cache=TRUE}
+# multiplot function from  Winston Chang's R cookbook
+# we use it to fit multiple plots in a single plot
+multiplot <- function(..., plotlist=NULL, cols) {
+    
+    require(grid)
+    
+    # Make a list from the ... arguments and plotlist
+    plots <- c(list(...), plotlist)
+    
+    numPlots = length(plots)
+    
+    # Make the panel
+    plotCols = cols                          # Number of columns of plots
+    plotRows = ceiling(numPlots/plotCols) # Number of rows needed, calculated from # of cols
+    
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(plotRows, plotCols)))
+    vplayout <- function(x, y)
+        viewport(layout.pos.row = x, layout.pos.col = y)
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+        curRow = ceiling(i/plotCols)
+        curCol = (i-1) %% plotCols + 1
+        print(plots[[i]], vp = vplayout(curRow, curCol ))
+        }
+    
+    }
+
+```
+
+##### Creating Aggregations (Injuries/Fatalities by event types , Crop/Property damages by event types)
+
+For computing all aggregations we performing the following sequence of steps 
+
+1. Aggregate the desired column across event type
+
+2. Filter out the values which do not add value like rows with a zero value 
+
+3. Sort the result and pick top 10 items
+
+4. Use the top 10 items in plots 
+
+Aggregrate injuries across event type
+```{r, echo=TRUE, cache=TRUE}
+
+# 1a. Aggregrate injuries across evttype
+totalinjuriesbyevttype<-aggregate(stormdata$INJURIES, by=list(evtype=stormdata$EVTYPE), FUN=sum)
+#rename columns 
+colnames(totalinjuriesbyevttype) <- c("evtype","injuries")
+# remove all the rows with 0 values ( i.e no affect on population health )
+nonzerototalinjuriesbyevttype<-totalinjuriesbyevttype[totalinjuriesbyevttype$injuries!=0,]
+#head(nonzerototalinjuriesbyevttype)
+# Since there are a lot of nonzero vectors , sort and plot the 
+# top 20
+sortedtotalinjuriesbyevttype<-nonzerototalinjuriesbyevttype[order(-nonzerototalinjuriesbyevttype$injuries),]
+top10sortedtotalinjuriesbyevttype<-sortedtotalinjuriesbyevttype[1:10,]
+#head(top10sortedtotalinjuriesbyevttype)
+```
+
+
+ Aggregrate fatalities across event type
+ 
+```{r, echo=TRUE, cache=TRUE}
+# 1b. Aggregrate fatalities across evttype
+totalfatalitiesbyevttype<-aggregate(stormdata$FATALITIES, by=list(evtype=stormdata$EVTYPE), FUN=sum)
+#rename columns 
+colnames(totalfatalitiesbyevttype) <- c("evtype","fatalities")
+# remove all the rows with 0 values ( i.e no affect on population health )
+nonzerototalfatalitiesbyevttype<-totalfatalitiesbyevttype[totalfatalitiesbyevttype$fatalities!=0,]
+#head(nonzerototalfatalitiesbyevttype)
+# Since there are a lot of nonzero vectors , sort and plot the 
+# top 20
+sortedtotalfatalitiesbyevttype<-nonzerototalfatalitiesbyevttype[order(-nonzerototalfatalitiesbyevttype$fatalities),]
+top10sortedtotalfatalitiesbyevttype<-sortedtotalfatalitiesbyevttype[1:10,]
+#head(top10sortedtotalfatalitiesbyevttype)
+```
+
+Aggregrate PROPDMGEXP across event type
+
+```{r, echo=TRUE, cache=TRUE}
+# 2a. Aggregrate PROPDMGEXP across evttype
+totalpropdmgbyevttype<-aggregate(stormdata$PROPDMGDOLLAR, by=list(evtype=stormdata$EVTYPE), FUN=sum)
+#rename columns 
+colnames(totalpropdmgbyevttype) <- c("evtype","propdamage")
+# remove all the rows with 0 values
+nonzerototalpropdmgbyevttype<-totalpropdmgbyevttype[totalpropdmgbyevttype$propdamage!=0,]
+#head(nonzerototalfatalitiesbyevttype)
+# Since there are a lot of nonzero vectors , sort and plot the 
+# top 20
+sortedtotalpropdmgbyevttype<-nonzerototalpropdmgbyevttype[order(-nonzerototalpropdmgbyevttype$propdamage),]
+top10sortedtotalpropdmgbyevttype<-sortedtotalpropdmgbyevttype[1:10,]
+```
+
+Aggregrate CROPDMGEXP across event type
+```{r, echo=TRUE, cache=TRUE}
+# 2b. Aggregrate CROPDMGEXP across evttype
+totalcropdmgbyevttype<-aggregate(stormdata$CROPDMGDOLLAR, by=list(evtype=stormdata$EVTYPE), FUN=sum)
+#rename columns 
+colnames(totalcropdmgbyevttype) <- c("evtype","cropdamage")
+# remove all the rows with 0 values 
+nonzerototalcropdmgbyevttype<-totalcropdmgbyevttype[totalcropdmgbyevttype$cropdamage!=0,]
+#head(nonzerototalfatalitiesbyevttype)
+# Since there are a lot of nonzero vectors , sort and plot the 
+# top 20
+sortedtotalcropdmgbyevttype<-nonzerototalcropdmgbyevttype[order(-nonzerototalcropdmgbyevttype$cropdamage),]
+top10sortedtotalcropdmgbyevttype<-sortedtotalcropdmgbyevttype[1:10,]
+```
+
+
+##### Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+To answer the above question , we use sorted injuries and fatalities calculated across evttype and plot them. 
+
+```{r, echo=TRUE, fig.width=40 , fig.height=15}
+
+ipbet<-ggplot(top10sortedtotalinjuriesbyevttype, aes(x=evtype,y=injuries)) + geom_bar(aes(fill=evtype), stat="identity")+ggtitle("Injuries aggregated across event types")
+
+fpbet<-ggplot(top10sortedtotalfatalitiesbyevttype, aes(x=evtype,y=fatalities)) + geom_bar(aes(fill=evtype), stat="identity")+ggtitle("Fatalities aggregated across event type")
+
+multiplot(ipbet , fpbet , cols=2)
+````
+
+###### Results
+
+Events (as indicated in the EVTYPE variable)  most harmful with respect to population health are 
+
+Top injuries by event type 
+```{r, echo=TRUE}
+head(top10sortedtotalinjuriesbyevttype$evtype)
+```
+
+Top fatalities by event type 
+```{r, echo=TRUE}
+head(top10sortedtotalfatalitiesbyevttype$evtype)
+```
+
+##### Across the United States, which types of events have the greatest economic consequences?
+
+To answer the above question , we use sorted crop damage  and property damage expenditures calculated across evttype and plot them. 
+
+```{r, echo=TRUE, fig.width=40 , fig.height=15}
+library(ggplot2)
+propdamagebet<-ggplot(top10sortedtotalpropdmgbyevttype, aes(x=evtype,y=propdamage)) + geom_bar(aes(fill=evtype), stat="identity")+ggtitle("Property damage aggregated across event types")
+
+cropdamagebet<-ggplot(top10sortedtotalcropdmgbyevttype, aes(x=evtype,y=cropdamage)) + geom_bar(aes(fill=evtype), stat="identity")+ggtitle("Crop damage aggregated across event type")
+
+multiplot(propdamagebet , cropdamagebet , cols=2)
+````
+
+###### Results
+
+Events with greatest economic consequences 
+
+Top property damages by event type 
+```{r, echo=TRUE}
+head(top10sortedtotalpropdmgbyevttype$evtype)
+```
+
+Top crop damages by event type 
+```{r, echo=TRUE}
+head(top10sortedtotalcropdmgbyevttype$evtype)
+```
+
